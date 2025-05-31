@@ -1,0 +1,245 @@
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transformer Architecture Visual</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8; /* Light blue-gray background */
+        }
+        .container {
+            max-width: 900px;
+        }
+        .word-box {
+            display: inline-block;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.5rem;
+            background-color: #ffffff;
+            border: 1px solid #cbd5e1; /* Light gray border */
+            margin: 0.25rem;
+            font-weight: 600;
+            color: #334155; /* Darker text */
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            cursor: pointer; /* Indicate interactivity */
+            transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+        }
+        .highlighted-word {
+            background-color: #bfdbfe; /* Light blue for highlighted word */
+            border-color: #60a5fa; /* Medium blue border */
+            color: #1e40af; /* Dark blue text */
+        }
+        .attention-line {
+            stroke: #60a5fa; /* Medium blue line */
+            stroke-width: 2;
+            opacity: 0.7;
+            transition: stroke-width 0.3s ease-in-out, opacity 0.3s ease-in-out;
+        }
+        .attention-line.strong {
+            stroke-width: 4;
+            opacity: 1;
+        }
+    </style>
+</head>
+<body class="p-4 sm:p-8 flex items-center justify-center min-h-screen">
+    <div class="container bg-white p-6 sm:p-8 rounded-lg shadow-xl border border-gray-200">
+        <h2 class="text-2xl sm:text-3xl font-bold text-center text-gray-800 mb-6">Understanding the Transformer Architecture: The "Attention" Mechanism</h2>
+
+        <p class="text-gray-600 mb-6 text-center leading-relaxed">
+            The Transformer is the core innovation behind modern Large Language Models (LLMs). Its key feature is the "Attention" mechanism, which allows the AI to weigh the importance of different words in a sentence when processing a particular word.
+        </p>
+
+        <div class="flex flex-col items-center justify-center mb-8">
+            <div id="sentence-container" class="flex flex-wrap justify-center items-center mb-4">
+                </div>
+            <svg id="attention-svg" width="100%" height="200" viewBox="0 0 800 200" class="border border-gray-300 rounded-lg shadow-md bg-gray-50">
+                </svg>
+        </div>
+
+        <p class="text-gray-600 mb-4 leading-relaxed">
+            In the example above, when the AI is processing the word "<span class="font-bold text-blue-700">jumps</span>", it doesn't just look at the words right next to it. Instead, the "Attention" mechanism allows it to understand that "<span class="font-bold text-blue-700">fox</span>" and "<span class="font-bold text-blue-700">dog</span>" are very important to the meaning of "jumps" in this sentence. The thicker lines indicate a stronger "attention" or connection.
+        </p>
+        <p class="text-gray-600 leading-relaxed">
+            **Try clicking on different words** in the sentence above to see how the "attention" shifts!
+        </p>
+        <p class="text-gray-600 leading-relaxed mb-6">
+            This ability to understand relationships between words, even far apart, is what makes Transformers so powerful for tasks like translation, summarization, and generating coherent long-form text.
+        </p>
+
+        <script>
+            // The sentence to be displayed and analyzed
+            const sentence = "The quick brown fox jumps over the lazy dog .".split(" ");
+            // Get references to the HTML elements
+            const sentenceContainer = document.getElementById('sentence-container');
+            const attentionSvg = document.getElementById('attention-svg');
+
+            // Array to store references to the word HTML elements
+            const wordElements = [];
+            let currentHighlightedWordIndex = 4; // Default to 'jumps'
+
+            // This function will set up the word elements and attach event listeners
+            function initializeVisual() {
+                // Clear existing words and lines if re-initializing
+                sentenceContainer.innerHTML = '';
+                attentionSvg.innerHTML = '';
+                wordElements.length = 0; // Clear the array
+
+                // Create and append word boxes to the sentence container
+                sentence.forEach((word, index) => {
+                    const wordBox = document.createElement('span');
+                    wordBox.className = 'word-box'; // Apply Tailwind classes for styling
+                    wordBox.textContent = word;
+                    wordBox.dataset.index = index; // Store index for later reference
+                    wordElements.push(wordBox);
+                    sentenceContainer.appendChild(wordBox);
+
+                    // Attach click listener to each word box
+                    wordBox.addEventListener('click', () => {
+                        currentHighlightedWordIndex = index; // Update the currently highlighted word index
+                        drawAttention(index);
+                    });
+                });
+
+                // Initial draw, focusing on "jumps" (index 4)
+                drawAttention(currentHighlightedWordIndex);
+            }
+
+            /**
+             * Draws attention lines from all other words to a specified target word.
+             * The thickness of the lines represents the "attention weight".
+             * @param {number} targetWordIndex - The index of the word currently being "focused" on.
+             */
+            function drawAttention(targetWordIndex) {
+                attentionSvg.innerHTML = ''; // Clear any previously drawn lines
+
+                // Remove highlight from all words first, then apply to the new target
+                wordElements.forEach(el => el.classList.remove('highlighted-word'));
+                const targetWordBox = wordElements[targetWordIndex];
+                targetWordBox.classList.add('highlighted-word'); // Highlight the target word
+
+                // Get SVG's actual dimensions and position relative to the viewport
+                const svgRect = attentionSvg.getBoundingClientRect();
+                const svgViewBoxWidth = attentionSvg.viewBox.baseVal.width;
+                const svgViewBoxHeight = attentionSvg.viewBox.baseVal.height;
+
+                // Calculate scaling factors from actual SVG size to its viewBox size
+                const svgScaleX = svgViewBoxWidth / svgRect.width;
+                const svgScaleY = svgViewBoxHeight / svgRect.height;
+
+                // Calculate the target word's position in viewport coordinates
+                const targetWordRect = targetWordBox.getBoundingClientRect();
+                const targetWordViewportX = targetWordRect.left + targetWordRect.width / 2;
+                const targetWordViewportY = targetWordRect.bottom; // Use bottom of the word box
+
+                // Convert target word's viewport coordinates to SVG viewBox coordinates
+                // X: (viewport X - SVG left in viewport) * SVG scale X
+                // Y: (viewport Y - SVG top in viewport) * SVG scale Y
+                const targetSvgX = (targetWordViewportX - svgRect.left) * svgScaleX;
+                // This Y coordinate represents the "origin" point for the lines within the SVG's conceptual space,
+                // which is where the lines from other words will converge. We want it to be a bit below the words.
+                const targetSvgY = (targetWordViewportY - svgRect.top) * svgScaleY;
+
+                // Define a fixed Y position within the SVG for the *bottom* end of the lines
+                // This is where the attention lines converge or diverge within the SVG visual area.
+                // It should be within the SVG's height, e.g., middle or lower half.
+                const lineEndPointY = svgViewBoxHeight * 0.4; // Adjust this value (e.g., 0.4, 0.5, 0.6) to control convergence point
+
+                // Define simulated attention weights for each word.
+                // These weights are illustrative and would be learned by a real Transformer model.
+                // The weights are relative to the 'jumps' word (index 4) for the initial display.
+                // For other words, these are just illustrative values.
+                const attentionWeightsMap = {
+                    // Attention when 'jumps' (index 4) is the target word
+                    4: { // Target word is 'jumps'
+                        0: 0.2, // The
+                        1: 0.3, // quick
+                        2: 0.4, // brown
+                        3: 0.9, // fox (strong connection)
+                        5: 0.5, // over
+                        6: 0.6, // the
+                        7: 0.8, // lazy
+                        8: 0.9, // dog (strong connection)
+                        9: 0.1  // .
+                    },
+                    // Example attention for 'fox' (index 3) as target
+                    3: {
+                        0: 0.1, 1: 0.2, 2: 0.8, // brown (strong)
+                        4: 0.7, // jumps (strong)
+                        5: 0.3, 6: 0.2, 7: 0.1, 8: 0.1, 9: 0.05
+                    },
+                    // Example attention for 'dog' (index 8) as target
+                    8: {
+                        0: 0.05, 1: 0.1, 2: 0.1, 3: 0.7, // fox (strong)
+                        4: 0.8, // jumps (strong)
+                        5: 0.2, 6: 0.6, // the (stronger for 'the dog')
+                        7: 0.9, // lazy (strong)
+                        9: 0.1
+                    },
+                    // Default/low attention for other words
+                    'default': {
+                        0: 0.1, 1: 0.1, 2: 0.1, 3: 0.1, 4: 0.1, 5: 0.1, 6: 0.1, 7: 0.1, 8: 0.1, 9: 0.1
+                    }
+                };
+
+                // Get the specific attention weights for the current target word, or use default
+                const currentAttentionWeights = attentionWeightsMap[targetWordIndex] || attentionWeightsMap['default'];
+
+
+                // Iterate through all words to draw lines to the target word
+                wordElements.forEach((wordBox, index) => {
+                    if (index === targetWordIndex) {
+                        // We are drawing lines *from* other words *to* the target word's conceptual point in the SVG.
+                        // So, no line from target to target in this visual.
+                        return;
+                    }
+
+                    const sourceWordRect = wordBox.getBoundingClientRect();
+                    const sourceWordViewportX = sourceWordRect.left + sourceWordRect.width / 2;
+                    const sourceWordViewportY = sourceWordRect.bottom; // Use bottom of the source word box
+
+                    // Convert source word's viewport coordinates to SVG viewBox coordinates
+                    const sourceSvgX = (sourceWordViewportX - svgRect.left) * svgScaleX;
+                    const sourceSvgY = (sourceWordViewportY - svgRect.top) * svgScaleY; // Line starts from the bottom of the source word
+
+                    // Create an SVG line element
+                    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                    line.setAttribute('x1', sourceSvgX);
+                    line.setAttribute('y1', sourceSvgY);
+                    line.setAttribute('x2', targetSvgX); // Line ends at the X position of the target word
+                    line.setAttribute('y2', lineEndPointY); // Line ends at a fixed Y point within the SVG
+
+                    line.classList.add('attention-line'); // Apply CSS class for styling
+
+                    // Determine the attention weight for this specific source-target pair
+                    const weight = currentAttentionWeights[index] || 0.1; // Default low weight if not specified
+                    line.style.strokeWidth = (weight * 4) + 'px'; // Scale thickness based on weight (max 4px for strong attention)
+                    line.style.opacity = (weight * 0.8) + 0.2; // Scale opacity (min 0.2, max 1.0)
+
+                    attentionSvg.appendChild(line); // Add the line to the SVG
+                });
+            }
+
+            // Call initializeVisual when the page loads
+            window.addEventListener('load', () => {
+                initializeVisual();
+            });
+
+            // Handle responsiveness: redraw lines when the window is resized
+            window.addEventListener('resize', () => {
+                // When resizing, we re-calculate positions and redraw for the currently highlighted word.
+                // Find the currently highlighted word's index.
+                const currentHighlighted = document.querySelector('.highlighted-word');
+                if (currentHighlighted) {
+                    const currentIndex = parseInt(currentHighlighted.dataset.index);
+                    drawAttention(currentIndex);
+                } else {
+                    // If no word is highlighted (e.g., on initial load before timeout), default to 'jumps'
+                    drawAttention(4);
+                }
+            });
+        </script>
+    </div>
+</body>
+</html>
