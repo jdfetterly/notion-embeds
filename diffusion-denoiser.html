@@ -1,0 +1,204 @@
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diffusion Process</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8; /* Light blue-gray background */
+            min-height: 100vh; /* Ensure body takes full viewport height */
+            display: flex; /* Use flexbox for centering content vertically */
+            align-items: center; /* Center content vertically */
+            justify-content: center; /* Center content horizontally */
+            padding: 2rem; /* Overall padding for the body */
+        }
+        .container {
+            max-width: 900px;
+            /* Removed padding-top here as body padding handles it */
+        }
+        .image-display-area {
+            width: 300px;
+            height: 300px;
+            border: 2px solid #cbd5e1;
+            background-color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden; /* Ensure image fits */
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .image-display-area img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain; /* Ensure image is fully visible */
+            transition: opacity 0.5s ease-in-out; /* Smooth transition for image changes */
+        }
+        .button-group button {
+            transition: transform 0.1s ease-in-out;
+        }
+        .button-group button:active {
+            transform: scale(0.98);
+        }
+        /* Basic spinner for loading state */
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-left-color: #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1.5s linear infinite; /* Slightly slower spin */
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="p-4 sm:p-8">
+    <div class="container bg-white p-6 sm:p-8 rounded-lg shadow-xl border border-gray-200">
+        <h2 class="text-2xl sm:text-3xl font-bold text-center text-gray-800 mb-6">Diffusion Process: How Images Are Generated</h2>
+
+        <p class="text-gray-600 mb-6 text-center leading-relaxed">
+            Diffusion models generate images by learning to reverse a process of gradually adding noise. See how it works below!
+        </p>
+
+        <div class="flex flex-col items-center justify-center mb-8">
+            <div class="image-display-area mb-6">
+                <img id="main-image-display" src="https://placehold.co/300x300/ADD8E6/000000?text=Original+Image" alt="Diffusion Process Image"
+                     onerror="this.onerror=null; console.error('Fallback image failed to load: ' + this.src); this.src='https://placehold.co/300x300/FF0000/FFFFFF?text=ERROR';">
+            </div>
+
+            <div class="flex space-x-4 button-group mb-4">
+                <button id="addNoiseBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-75">
+                    Add Noise
+                </button>
+                <button id="generateImageBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-75 hidden">
+                    Remove Noise
+                </button>
+            </div>
+            <button id="resetBtn" class="text-sm text-gray-500 hover:text-gray-700 underline focus:outline-none">
+                Reset
+            </button>
+        </div>
+
+        <div id="status-area" class="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg text-left text-gray-700 min-h-[80px] flex items-center">
+            <span id="process-spinner" class="hidden spinner mr-2"></span>
+            <p id="status-text" class="text-sm sm:text-base">Start by clicking "Add Noise" to see the forward diffusion process.</p>
+        </div>
+
+        <p class="text-gray-500 text-xs mt-4 text-center">
+            *Visuals are simplified representations for demonstration purposes. For full functionality, ensure your custom images are hosted.*
+        </p>
+
+        <script>
+            const mainImageDisplay = document.getElementById('main-image-display');
+            const addNoiseBtn = document.getElementById('addNoiseBtn');
+            const generateImageBtn = document.getElementById('generateImageBtn'); // This is now the "Remove Noise" button
+            const resetBtn = document.getElementById('resetBtn');
+            const statusText = document.getElementById('status-text');
+            const processSpinner = document.getElementById('process-spinner');
+
+            // Define image paths for forward and reverse processes
+            // IMPORTANT: For full custom visuals, replace these placeholder URLs with YOUR hosted image URLs.
+            // Example: 'https://jdeferterly.github.io/notion-embeds/images/diffusion/diffusion_original.png'
+            const forwardNoiseSteps = [
+                'https://placehold.co/300x300/ADD8E6/000000?text=Original+Image',
+                'https://placehold.co/300x300/C0C0C0/333333?text=Noise+Step+1',
+                'https://placehold.co/300x300/A0A0A0/333333?text=Noise+Step+2',
+                'https://placehold.co/300x300/808080/FFFFFF?text=Full+Noise'
+            ];
+
+            const reverseDenoiseSteps = [
+                'https://placehold.co/300x300/808080/FFFFFF?text=Full+Noise',      // Starts from full noise placeholder
+                'https://placehold.co/300x300/A0A0A0/333333?text=Refining+1',
+                'https://placehold.co/300x300/C0C0C0/333333?text=Refining+2',
+                'https://placehold.co/300x300/ADD8E6/000000?text=Generated+New!'
+            ];
+
+            let currentNoiseStep = 0;
+            let isFullyNoisy = false;
+            let isGenerating = false;
+
+            function updateStatus(message, showSpinner = false) {
+                statusText.textContent = message;
+                if (showSpinner) {
+                    processSpinner.classList.remove('hidden');
+                } else {
+                    processSpinner.classList.add('hidden');
+                }
+            }
+
+            function setButtonsDisabled(addNoise, removeNoise, reset) {
+                addNoiseBtn.disabled = addNoise;
+                generateImageBtn.disabled = removeNoise; // Renamed for clarity
+                resetBtn.disabled = reset;
+            }
+
+            function resetSimulator() {
+                currentNoiseStep = 0;
+                isFullyNoisy = false;
+                isGenerating = false;
+                mainImageDisplay.src = forwardNoiseSteps[0]; 
+                updateStatus("Simulator reset. Click 'Add Noise' to begin the forward diffusion process.");
+                setButtonsDisabled(false, true, true); // "Remove Noise" disabled on reset
+                generateImageBtn.classList.add('hidden'); // Ensure hidden on reset
+            }
+
+            async function addNoise() {
+                if (currentNoiseStep < forwardNoiseSteps.length - 1 && !isGenerating) {
+                    setButtonsDisabled(true, true, true); // Disable all buttons during transition
+                    updateStatus(`Adding noise... (Step ${currentNoiseStep + 1} of ${forwardNoiseSteps.length -1})`, true);
+
+                    currentNoiseStep++;
+                    mainImageDisplay.src = forwardNoiseSteps[currentNoiseStep];
+                    
+                    await new Promise(resolve => setTimeout(resolve, 800)); // Short delay for visual effect
+
+                    if (currentNoiseStep === forwardNoiseSteps.length - 1) {
+                        isFullyNoisy = true;
+                        updateStatus("Image is now fully noisy. This is the 'forward' diffusion process.", false);
+                        generateImageBtn.classList.remove('hidden'); // SHOW THE "Remove Noise" BUTTON
+                        setButtonsDisabled(true, false, false); // Enable "Remove Noise" and reset
+                    } else {
+                        updateStatus(`Noise level: ${Math.round((currentNoiseStep / (forwardNoiseSteps.length - 1)) * 100)}%`, false);
+                        setButtonsDisabled(false, true, false); // Re-enable add noise, "Remove Noise" remains disabled until full noise
+                    }
+                }
+            }
+
+            async function generateImage() { // Function name remains 'generateImage' for internal consistency
+                if (!isFullyNoisy || isGenerating) return;
+
+                isGenerating = true;
+                setButtonsDisabled(true, true, true); // Disable all during generation
+                updateStatus("Starting noise removal process...", true); // Updated status text
+
+                mainImageDisplay.src = reverseDenoiseSteps[0]; // Start from full noise image
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                for (let i = 1; i < reverseDenoiseSteps.length; i++) {
+                    updateStatus(`Refining image by removing noise (Step ${i} of ${reverseDenoiseSteps.length - 1})...`, true); // Updated status text
+                    mainImageDisplay.src = reverseDenoiseSteps[i];
+                    await new Promise(resolve => setTimeout(resolve, 1000)); // Delay for each denoise step
+                }
+
+                isGenerating = false;
+                updateStatus("Noise removed! A new image has been generated through the 'reverse' diffusion process.", false); // Updated status text
+                setButtonsDisabled(true, true, false); // Keep "Remove Noise" disabled as it's done, enable reset
+            }
+
+            // Event Listeners
+            addNoiseBtn.addEventListener('click', addNoise);
+            generateImageBtn.addEventListener('click', generateImage);
+            resetBtn.addEventListener('click', resetSimulator);
+
+            // Initial state on load
+            window.addEventListener('load', resetSimulator);
+        </script>
+    </div>
+</body>
+</html>
