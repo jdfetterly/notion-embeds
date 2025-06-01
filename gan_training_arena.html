@@ -1,0 +1,629 @@
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GAN Training Arena</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8; /* Light blue-gray background */
+        }
+        .container {
+            max-width: 900px;
+        }
+        .gan-box {
+            background-color: #ffffff;
+            border: 2px solid #cbd5e1;
+            border-radius: 0.75rem;
+            padding: 1rem;
+            text-align: center;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            transition: all 0.3s ease-in-out;
+            min-width: 150px;
+            min-height: 120px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        .gan-box.active {
+            border-color: #3b82f6; /* Blue border when active */
+            box-shadow: 0 6px 12px rgba(59, 130, 246, 0.3);
+            transform: scale(1.02); /* Slight zoom */
+        }
+        .gan-box.success {
+            border-color: #22c55e; /* Green border for success */
+            box-shadow: 0 6px 12px rgba(34, 197, 94, 0.3);
+        }
+        .gan-box.fail {
+            border-color: #ef4444; /* Red border for failure */
+            box-shadow: 0 6px 12px rgba(239, 68, 68, 0.3);
+        }
+        .gan-icon {
+            font-size: 2.5rem;
+            color: #475569; /* Slate gray */
+            margin-bottom: 0.5rem;
+        }
+        /* SVG for arrows - will overlay the entire arena */
+        .gan-arrows-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none; /* Allows clicks on elements underneath */
+            z-index: 10;
+        }
+        .arrow {
+            fill: none;
+            stroke: #94a3b8; /* Gray stroke */
+            stroke-width: 3;
+            marker-end: url(#arrowhead);
+            transition: stroke 0.3s ease-in-out, stroke-width 0.3s ease-in-out, opacity 0.3s ease-in-out;
+            opacity: 0; /* Hidden by default */
+        }
+        .arrow.active {
+            stroke: #3b82f6; /* Blue stroke when active */
+            stroke-width: 4;
+            opacity: 1;
+            animation: pulse-arrow 0.8s infinite alternate; /* Add pulse animation */
+        }
+        @keyframes pulse-arrow {
+            from { stroke-width: 4; opacity: 1; }
+            to { stroke-width: 5; opacity: 0.8; }
+        }
+        .image-placeholder {
+            width: 80px;
+            height: 80px;
+            background-color: #e2e8f0; /* Light gray */
+            border: 1px dashed #94a3b8;
+            border-radius: 0.5rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #64748b;
+            font-size: 0.75rem;
+            text-align: center;
+            position: relative; /* For result overlay */
+            transition: background-color 0.3s ease-in-out, border-color 0.3s ease-in-out;
+            opacity: 0; /* Hidden by default */
+        }
+        .image-placeholder.show {
+            opacity: 1;
+        }
+        .image-placeholder.fake {
+            background-color: #bfdbfe; /* Light blue for fake */
+            border-color: #60a5fa;
+        }
+        .image-placeholder.real {
+            background-color: #d1fae5; /* Light green for real */
+            border-color: #34d399;
+        }
+        .placeholder-result {
+            position: absolute;
+            bottom: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.8rem;
+            font-weight: bold;
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+            text-shadow: 0 0 5px rgba(255,255,255,0.7); /* Text shadow for visibility */
+            white-space: nowrap; /* Prevent line breaks */
+        }
+        .placeholder-result.show {
+            opacity: 1;
+            color: #1f2937; /* Dark text */
+        }
+        .placeholder-result.correct {
+            color: #22c55e;
+        }
+        .placeholder-result.incorrect {
+            color: #ef4444;
+        }
+        /* Basic spinner for loading state */
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-left-color: #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        /* Styles for numbered steps */
+        .step-list {
+            list-style: none; /* Remove default bullet points */
+            padding-left: 0;
+            text-align: left;
+        }
+        .step-list li {
+            margin-bottom: 0.75rem;
+            padding-left: 1.5rem; /* Indent for number */
+            position: relative;
+            font-size: 0.95rem;
+            color: #64748b; /* Gray text */
+            opacity: 0.4; /* Faded by default */
+            transition: opacity 0.3s ease-in-out, color 0.3s ease-in-out;
+        }
+        .step-list li.active-step {
+            opacity: 1;
+            color: #1f2937; /* Darker text for active step */
+            font-weight: 600;
+        }
+        .step-list li::before {
+            content: counter(step-counter);
+            counter-increment: step-counter;
+            position: absolute;
+            left: 0;
+            top: 0;
+            background-color: #a78bfa; /* Purple for number background */
+            color: white;
+            border-radius: 50%;
+            width: 1.25rem;
+            height: 1.25rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: bold;
+        }
+        .step-list li.active-step::before {
+            background-color: #8b5cf6; /* Darker purple for active number */
+        }
+    </style>
+</head>
+<body class="p-4 sm:p-8 flex items-center justify-center min-h-screen">
+    <div class="container bg-white p-6 sm:p-8 rounded-lg shadow-xl border border-gray-200">
+        <h2 class="text-2xl sm:text-3xl font-bold text-center text-gray-800 mb-6">GAN Training Arena: How Generative AI Learns</h2>
+
+        <p class="text-gray-600 mb-6 text-center leading-relaxed">
+            A **Generative Adversarial Network (GAN)** involves two AI models, the **Generator** (a forger) and the **Discriminator** (a detective), learning by competing. The Generator creates fakes, and the Discriminator tries to tell them apart from real data.
+        </p>
+
+        <div id="gan-diagram-area" class="relative w-full flex flex-col items-center justify-center mb-8" style="min-height: 400px;">
+            <svg id="gan-arrows-svg" class="gan-arrows-overlay" viewBox="0 0 900 400">
+                <defs>
+                    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="0" refY="3.5" orient="auto">
+                        <polygon points="0 0, 10 3.5, 0 7" fill="#94a3b8" />
+                    </marker>
+                    <marker id="arrowhead-active" markerWidth="10" markerHeight="7" refX="0" refY="3.5" orient="auto">
+                        <polygon points="0 0, 10 3.5, 0 7" fill="#3b82f6" />
+                    </marker>
+                </defs>
+                </svg>
+
+            <div class="flex justify-around w-full mb-8">
+                <div id="generator-box" class="gan-box">
+                    <i class="fas fa-paint-brush gan-icon"></i>
+                    <span class="font-semibold text-gray-700">Generator</span>
+                </div>
+                <div id="real-data-box" class="gan-box">
+                    <i class="fas fa-images gan-icon"></i>
+                    <span class="font-semibold text-gray-700">Real Data</span>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-center w-8/12 mb-8" style="min-height: 100px;">
+                <div id="fake-image-placeholder" class="image-placeholder mr-4">
+                    Fake
+                    <span id="fake-result" class="placeholder-result"></span>
+                </div>
+                <div id="real-image-placeholder" class="image-placeholder ml-4">
+                    Real
+                    <span id="real-result" class="placeholder-result"></span>
+                </div>
+            </div>
+
+            <div class="flex justify-center w-full">
+                <div id="discriminator-box" class="gan-box">
+                    <i class="fas fa-gavel gan-icon"></i>
+                    <span class="font-semibold text-gray-700">Discriminator</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-8 pt-6 border-t border-gray-200">
+            <h3 class="text-xl font-semibold text-gray-700 mb-4 text-center">The Training Process: Step-by-Step</h3>
+            <ol class="step-list" style="counter-reset: step-counter;">
+                <li id="step-1-text">The Generator creates a fake image (e.g., a fake photo of a person) and sends it to the Discriminator.</li>
+                <li id="step-2-text">The Discriminator also receives a real image (e.g., an authentic photo of a person) from the Real Data source.</li>
+                <li id="step-3-text">The Discriminator's task is to identify which image is real and which is fake. It makes its judgment and learns from its correctness or mistakes.</li>
+                <li id="step-4-text">The Generator receives feedback on how well its fake image fooled the Discriminator. It then adjusts its strategy to create even more convincing fakes for the next round.</li>
+            </ol>
+        </div>
+
+        <div class="mt-8 pt-6 border-t border-gray-200 text-center">
+            <button id="runTrainingStepBtn" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-75">
+                Run Training Step
+            </button>
+            <div id="training-progress-area" class="mt-6 p-4 bg-purple-50 border border-purple-200 rounded-lg text-left text-gray-700 min-h-[100px]">
+                <span id="training-spinner" class="hidden spinner mr-2"></span>
+                <p id="training-status-text" class="inline-block text-sm sm:text-base">Click "Run Training Step" to see how GANs learn!</p>
+                <p id="generator-score" class="text-xs text-gray-600 mt-2">Generator's Success at Fooling: 0%</p>
+                <p id="discriminator-score" class="text-xs text-gray-600">Discriminator's Accuracy: 0%</p>
+            </div>
+        </div>
+
+        <script>
+            // Get references to HTML elements
+            const ganArrowsSvg = document.getElementById('gan-arrows-svg'); // The main SVG for all arrows
+            const realDataBox = document.getElementById('real-data-box');
+            const generatorBox = document.getElementById('generator-box');
+            const discriminatorBox = document.getElementById('discriminator-box');
+            const fakeImagePlaceholder = document.getElementById('fake-image-placeholder');
+            const realImagePlaceholder = document.getElementById('real-image-placeholder');
+            const fakeResult = document.getElementById('fake-result');
+            const realResult = document.getElementById('real-result');
+            const runTrainingStepBtn = document.getElementById('runTrainingStepBtn');
+            const trainingStatusText = document.getElementById('training-status-text');
+            const generatorScoreText = document.getElementById('generator-score');
+            const discriminatorScoreText = document.getElementById('discriminator-score');
+            const trainingSpinner = document.getElementById('training-spinner');
+
+            // Get references to the step text elements
+            const stepTexts = [
+                document.getElementById('step-1-text'),
+                document.getElementById('step-2-text'),
+                document.getElementById('step-3-text'),
+                document.getElementById('step-4-text')
+            ];
+
+            let trainingStep = 0;
+            let generatorConvincingness = 10; // Generator's initial ability to fool (0-100%)
+            let discriminatorAccuracy = 10; // Discriminator's initial ability to detect (0-100%)
+
+            // Helper to get bounding client rect for an element
+            function getElementRect(elementId) {
+                const element = document.getElementById(elementId);
+                if (!element) {
+                    console.error(`Element with ID ${elementId} not found.`);
+                    return null;
+                }
+                return element.getBoundingClientRect();
+            }
+
+            // Helper to convert viewport coordinates to SVG viewBox coordinates
+            function toSvgCoords(viewportX, viewportY) {
+                const svgRect = ganArrowsSvg.getBoundingClientRect();
+                const svgViewBoxWidth = ganArrowsSvg.viewBox.baseVal.width;
+                const svgViewBoxHeight = ganArrowsSvg.viewBox.baseVal.height;
+
+                const svgX = (viewportX - svgRect.left) * (svgViewBoxWidth / svgRect.width);
+                const svgY = (viewportY - svgRect.top) * (svgViewBoxHeight / svgRect.height);
+                return [svgX, svgY];
+            }
+
+            /**
+             * Calculates the intersection point of a line segment (from center of startRect to center of endRect)
+             * with the perimeter of the startRect and endRect.
+             * This ensures arrows connect cleanly to the edges/corners.
+             * @param {DOMRect} startRect - Bounding rectangle of the starting element.
+             * @param {DOMRect} endRect - Bounding rectangle of the ending element.
+             * @returns {Array<Array<number>>} An array containing two [x, y] pairs: [startPoint, endPoint] in SVG viewBox coordinates.
+             */
+            function getIntersectionPoints(startRect, endRect) {
+                const startCenterX = startRect.left + startRect.width / 2;
+                const startCenterY = startRect.top + startRect.height / 2;
+                const endCenterX = endRect.left + endRect.width / 2;
+                const endCenterY = endRect.top + endRect.height / 2;
+
+                // Function to find intersection of a line (p1, p2) with a rectangle
+                function intersectLineRect(p1, p2, rect) {
+                    const { left, top, right, bottom } = rect;
+                    const points = [];
+
+                    // Handle vertical line case
+                    if (p2[0] - p1[0] === 0) { // Vertical line
+                        if (p1[0] >= left && p1[0] <= right) {
+                            if (top >= Math.min(p1[1], p2[1]) && top <= Math.max(p1[1], p2[1])) points.push([p1[0], top]);
+                            if (bottom >= Math.min(p1[1], p2[1]) && bottom <= Math.max(p1[1], p2[1])) points.push([p1[0], bottom]);
+                        }
+                    } 
+                    // Handle horizontal line case
+                    else if (p2[1] - p1[1] === 0) { // Horizontal line
+                        if (p1[1] >= top && p1[1] <= bottom) {
+                            if (left >= Math.min(p1[0], p2[0]) && left <= Math.max(p1[0], p2[0])) points.push([left, p1[1]]);
+                            if (right >= Math.min(p1[0], p2[0]) && right <= Math.max(p1[0], p2[0])) points.push([right, p1[1]]);
+                        }
+                    }
+                    else { // General case
+                        const slope = (p2[1] - p1[1]) / (p2[0] - p1[0]);
+                        const intercept = p1[1] - slope * p1[0];
+
+                        // Intersection with top edge: y = top
+                        const x_top = (top - intercept) / slope;
+                        if (x_top >= left && x_top <= right) points.push([x_top, top]);
+                        // Intersection with bottom edge: y = bottom
+                        const x_bottom = (bottom - intercept) / slope;
+                        if (x_bottom >= left && x_bottom <= right) points.push([x_bottom, bottom]);
+                        // Intersection with left edge: x = left
+                        const y_left = slope * left + intercept;
+                        if (y_left >= top && y_left <= bottom) points.push([left, y_left]);
+                        // Intersection with right edge: x = right
+                        const y_right = slope * right + intercept;
+                        if (y_right >= top && y_right <= bottom) points.push([right, y_right]);
+                    }
+
+                    // Filter out points that are outside the line segment (p1, p2)
+                    const epsilon = 1e-6;
+                    return points.filter(p => {
+                        const minX = Math.min(p1[0], p2[0]);
+                        const maxX = Math.max(p1[0], p2[0]);
+                        const minY = Math.min(p1[1], p2[1]);
+                        const maxY = Math.max(p1[1], p2[1]);
+                        // Check if point is within the bounding box of the segment
+                        return p[0] >= minX - epsilon && p[0] <= maxX + epsilon && p[1] >= minY - epsilon && p[1] <= maxY + epsilon;
+                    }).filter((p, i, self) => // Remove duplicate points (can happen with corners)
+                        i === self.findIndex((t) => (t[0] === p[0] && t[1] === p[1]))
+                    );
+                }
+
+                // Simple distance helper for getIntersectionPoints
+                function getDistance(p1, p2) {
+                    return Math.sqrt(Math.pow(p1[0] - p2[0], 2) + Math.pow(p1[1] - p2[1], 2));
+                }
+
+                const startPointCandidates = intersectLineRect([startCenterX, startCenterY], [endCenterX, endCenterY], startRect);
+                const endPointCandidates = intersectLineRect([startCenterX, startCenterY], [endCenterX, endCenterY], endRect);
+
+                let finalStartPoint = [startCenterX, startCenterY]; // Default to center if no intersection found
+                let finalEndPoint = [endCenterX, endCenterY];       // Default to center if no intersection found
+
+                // Pick the candidate closest to the actual center of the other element
+                if (startPointCandidates.length > 0) {
+                    finalStartPoint = startPointCandidates.reduce((prev, curr) => 
+                        getDistance([curr[0], curr[1]], [endCenterX, endCenterY]) < getDistance([prev[0], prev[1]], [endCenterX, endCenterY]) ? curr : prev
+                    );
+                }
+                if (endPointCandidates.length > 0) {
+                    finalEndPoint = endPointCandidates.reduce((prev, curr) => 
+                        getDistance([curr[0], curr[1]], [startCenterX, startCenterY]) < getDistance([prev[0], prev[1]], [startCenterX, startCenterY]) ? curr : prev
+                    );
+                }
+
+                // Manual adjustments based on specific visual requirements from screenshots
+                // Generator to Fake: from bottom-center of Generator to top-right corner of Fake
+                if (startRect.id === 'generator-box' && endRect.id === 'fake-image-placeholder') {
+                    finalStartPoint = [startRect.left + startRect.width / 2, startRect.bottom]; // Bottom Center of Generator
+                    finalEndPoint = [endRect.right, endRect.top]; // Top Right Corner of Fake
+                }
+                // Real Data to Real: from bottom-center of Real Data to top-left corner of Real
+                else if (startRect.id === 'real-data-box' && endRect.id === 'real-image-placeholder') {
+                     finalStartPoint = [startRect.left + startRect.width / 2, startRect.bottom]; // Bottom Center of Real Data
+                     finalEndPoint = [endRect.left, endRect.top]; // Top Left Corner of Real
+                }
+                // Fake to Discriminator: from bottom-center of Fake to top-left corner of Discriminator
+                else if (startRect.id === 'fake-image-placeholder' && endRect.id === 'discriminator-box') {
+                    finalStartPoint = [startRect.left + startRect.width / 2, startRect.bottom]; // Bottom Center of Fake
+                    finalEndPoint = [endRect.left, endRect.top]; // Top Left Corner of Discriminator
+                }
+                // Real to Discriminator: from bottom-center of Real to top-right corner of Discriminator
+                else if (startRect.id === 'real-image-placeholder' && endRect.id === 'discriminator-box') {
+                    finalStartPoint = [startRect.left + startRect.width / 2, startRect.bottom]; // Bottom Center of Real
+                    finalEndPoint = [endRect.right, endRect.top]; // Top Right Corner of Discriminator
+                }
+                // Discriminator to Generator (Feedback): from top-center of Discriminator to bottom-center of Generator
+                else if (startRect.id === 'discriminator-box' && endRect.id === 'generator-box') {
+                    finalStartPoint = [startRect.left + startRect.width / 2, startRect.top]; // Top Center of Discriminator
+                    finalEndPoint = [endRect.left + endRect.width / 2, endRect.bottom]; // Bottom Center of Generator
+                }
+
+
+                // Convert to SVG coordinates
+                return [toSvgCoords(finalStartPoint[0], finalStartPoint[1]), toSvgCoords(finalEndPoint[0], finalEndPoint[1])];
+            }
+
+
+            // Helper to draw or update an SVG line
+            function drawArrow(id, startElementId, endElementId, active = false) {
+                let line = document.getElementById(id);
+                if (!line) {
+                    line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                    line.setAttribute("id", id);
+                    ganArrowsSvg.appendChild(line);
+                }
+
+                const startRect = getElementRect(startElementId);
+                const endRect = getElementRect(endElementId);
+
+                if (!startRect || !endRect) return;
+
+                const [startSvgPoint, endSvgPoint] = getIntersectionPoints(startRect, endRect);
+
+                line.setAttribute("x1", startSvgPoint[0]);
+                line.setAttribute("y1", startSvgPoint[1]);
+                line.setAttribute("x2", endSvgPoint[0]);
+                line.setAttribute("y2", endSvgPoint[1]);
+                line.classList.add("arrow");
+                line.setAttribute("marker-end", `url(#${active ? 'arrowhead-active' : 'arrowhead'})`);
+
+                if (active) {
+                    line.classList.add('active');
+                    document.getElementById('arrowhead-active').querySelector('polygon').setAttribute('fill', '#3b82f6');
+                } else {
+                    line.classList.remove('active');
+                    document.getElementById('arrowhead').querySelector('polygon').setAttribute('fill', '#94a3b8');
+                }
+            }
+
+            // Function to reset all visual states
+            function resetVisuals() {
+                [realDataBox, generatorBox, discriminatorBox].forEach(box => {
+                    box.classList.remove('active', 'success', 'fail');
+                });
+                fakeImagePlaceholder.classList.remove('show', 'fake', 'real');
+                realImagePlaceholder.classList.remove('show', 'fake', 'real');
+                fakeImagePlaceholder.textContent = 'Fake';
+                realImagePlaceholder.textContent = 'Real';
+                fakeResult.classList.remove('show', 'correct', 'incorrect');
+                realResult.classList.remove('show', 'correct', 'incorrect');
+                fakeResult.textContent = '';
+                realResult.textContent = '';
+
+                // Remove all drawn arrows
+                const existingArrows = ganArrowsSvg.querySelectorAll('.arrow');
+                existingArrows.forEach(arrow => arrow.remove());
+
+                // Reset step text highlights
+                stepTexts.forEach(step => step.classList.remove('active-step'));
+            }
+
+            // Function to simulate one training step
+            async function runTrainingStep() {
+                runTrainingStepBtn.disabled = true;
+                trainingSpinner.classList.remove('hidden');
+                resetVisuals(); // Clear previous step's highlights
+
+                trainingStep++;
+                trainingStatusText.textContent = `Step ${trainingStep}: Starting new training round...`;
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                // --- Phase 1: Generator Creates a Fake ---
+                stepTexts[0].classList.add('active-step'); // Highlight Step 1
+                generatorBox.classList.add('active');
+                trainingStatusText.textContent = `Step ${trainingStep}: Generator creates a fake image.`;
+                await new Promise(resolve => setTimeout(resolve, 800));
+
+                // Draw arrow from Generator to Fake Image Placeholder
+                drawArrow('gen-fake-arrow', 'generator-box', 'fake-image-placeholder', true);
+                fakeImagePlaceholder.classList.add('show', 'fake');
+                fakeImagePlaceholder.textContent = 'Fake (Generated)';
+                trainingStatusText.textContent = `Step ${trainingStep}: Fake image sent for judgment.`;
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                drawArrow('gen-fake-arrow', 'generator-box', 'fake-image-placeholder', false); // Deactivate arrow
+                generatorBox.classList.remove('active');
+                stepTexts[0].classList.remove('active-step'); // Deactivate Step 1
+
+                // --- Phase 2: Discriminator Receives Real Data ---
+                stepTexts[1].classList.add('active-step'); // Highlight Step 2
+                realDataBox.classList.add('active');
+                discriminatorBox.classList.add('active'); // Discriminator activates to receive both
+                trainingStatusText.textContent = `Step ${trainingStep}: Discriminator also receives real data.`;
+                await new Promise(resolve => setTimeout(resolve, 800));
+
+                // Draw arrow from Real Data to Real Image Placeholder
+                drawArrow('real-real-arrow', 'real-data-box', 'real-image-placeholder', true);
+                realImagePlaceholder.classList.add('show', 'real');
+                realImagePlaceholder.textContent = 'Real (Authentic)';
+                trainingStatusText.textContent = `Step ${trainingStep}: Discriminator is now judging both images.`;
+                await new Promise(resolve => setTimeout(resolve, 1500));
+                drawArrow('real-real-arrow', 'real-data-box', 'real-image-placeholder', false); // Deactivate arrow
+                realDataBox.classList.remove('active');
+                stepTexts[1].classList.remove('active-step'); // Deactivate Step 2
+
+
+                // --- Phase 3: Discriminator Makes a Call & Learns ---
+                stepTexts[2].classList.add('active-step'); // Highlight Step 3
+                let discriminatorFooledByFake = (Math.random() * 100) > generatorConvincingness; // Higher gen conv = more likely fooled
+                let discriminatorIdentifiedReal = (Math.random() * 100) < discriminatorAccuracy; // Higher disc acc = more likely identified real
+
+                // Update results for placeholders
+                fakeResult.textContent = discriminatorFooledByFake ? 'Mistook for Real' : 'Identified as Fake';
+                fakeResult.classList.add('show', discriminatorFooledByFake ? 'incorrect' : 'correct');
+
+                realResult.textContent = discriminatorIdentifiedReal ? 'Identified as Real' : 'Mistook for Fake';
+                realResult.classList.add('show', discriminatorIdentifiedReal ? 'correct' : 'incorrect');
+
+                // Draw arrows from image placeholders to Discriminator
+                drawArrow('fake-to-disc-arrow', 'fake-image-placeholder', 'discriminator-box', true);
+                drawArrow('real-to-disc-arrow', 'real-image-placeholder', 'discriminator-box', true);
+                await new Promise(resolve => setTimeout(resolve, 1000)); // Short pause for arrows to show
+
+                // Update Discriminator's score based on its performance
+                let discPerformanceFactor = 0; // 0 for mixed, +1 for good, -1 for bad
+                if (!discriminatorFooledByFake && discriminatorIdentifiedReal) { // Perfect classification
+                    discPerformanceFactor = 1;
+                    discriminatorBox.classList.add('success');
+                    trainingStatusText.textContent = `Step ${trainingStep}: Discriminator perfectly identified both! It learns fast!`;
+                } else if (discriminatorFooledByFake && !discriminatorIdentifiedReal) { // Fooled by fake AND mistook real for fake
+                    discPerformanceFactor = -1;
+                    discriminatorBox.classList.add('fail');
+                    trainingStatusText.textContent = `Step ${trainingStep}: Discriminator struggled! It was fooled by both.`;
+                } else { // Mixed results
+                    discPerformanceFactor = 0;
+                    trainingStatusText.textContent = `Step ${trainingStep}: Discriminator had mixed results. Learning continues...`;
+                }
+                // Update discriminator accuracy
+                discriminatorAccuracy = Math.max(5, Math.min(95, discriminatorAccuracy + (discPerformanceFactor * 5) + (Math.random() * 3 - 1.5)));
+                await new Promise(resolve => setTimeout(resolve, 1500));
+
+                drawArrow('fake-to-disc-arrow', 'fake-image-placeholder', 'discriminator-box', false);
+                drawArrow('real-to-disc-arrow', 'real-image-placeholder', 'discriminator-box', false);
+                discriminatorBox.classList.remove('active', 'success', 'fail'); // Clear status for next phase
+                stepTexts[2].classList.remove('active-step'); // Deactivate Step 3
+
+
+                // --- Phase 4: Generator Learns from Discriminator's Feedback ---
+                stepTexts[3].classList.add('active-step'); // Highlight Step 4
+                // Feedback arrow from Discriminator to Generator
+                drawArrow('disc-gen-feedback-arrow', 'discriminator-box', 'generator-box', true);
+                generatorBox.classList.add('active'); // Generator is now active for learning
+                trainingStatusText.textContent = `Step ${trainingStep}: Generator gets feedback from Discriminator.`;
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
+                // Adjust Generator's convincingness based on Discriminator's judgment on the fake
+                let genPerformanceFactor = discriminatorFooledByFake ? 1 : -1; // If Discriminator was fooled (true), Generator did well (1); otherwise, Generator failed (-1)
+                
+                if (genPerformanceFactor === 1) {
+                    generatorConvincingness = Math.max(5, Math.min(95, generatorConvincingness + 5 + (Math.random() * 3 - 1.5)));
+                    generatorBox.classList.add('success');
+                    trainingStatusText.textContent = `Step ${trainingStep}: Generator's fake was convincing! It learns to make better fakes.`;
+                } else {
+                    generatorConvincingness = Math.max(5, Math.min(95, generatorConvincingness - 5 - (Math.random() * 3 - 1.5)));
+                    generatorBox.classList.add('fail');
+                    trainingStatusText.textContent = `Step ${trainingStep}: Generator's fake was detected. It learns from its mistakes.`;
+                }
+                await new Promise(resolve => setTimeout(resolve, 1500));
+
+                // Final cleanup and score display
+                drawArrow('disc-gen-feedback-arrow', 'discriminator-box', 'generator-box', false); // Deactivate feedback arrow
+                generatorBox.classList.remove('active', 'success', 'fail');
+                stepTexts[3].classList.remove('active-step'); // Deactivate Step 4
+
+
+                generatorScoreText.textContent = `Generator's Success at Fooling: ${generatorConvincingness.toFixed(1)}%`;
+                discriminatorScoreText.textContent = `Discriminator's Accuracy: ${discriminatorAccuracy.toFixed(1)}%`;
+                trainingStatusText.textContent = `Step ${trainingStep} completed. Click "Run Training Step" for the next iteration.`;
+                trainingSpinner.classList.add('hidden');
+                runTrainingStepBtn.disabled = false;
+            }
+
+            // Initial setup on page load
+            window.addEventListener('load', () => {
+                // Set initial SVG viewBox based on diagram area size
+                const diagramArea = document.getElementById('gan-diagram-area');
+                const diagramRect = diagramArea.getBoundingClientRect();
+                ganArrowsSvg.setAttribute('viewBox', `0 0 ${diagramRect.width} ${diagramRect.height}`);
+
+                trainingStatusText.textContent = 'Click "Run Training Step" to see how GANs learn!';
+                generatorScoreText.textContent = `Generator's Success at Fooling: ${generatorConvincingness.toFixed(1)}%`;
+                discriminatorScoreText.textContent = `Discriminator's Accuracy: ${discriminatorAccuracy.toFixed(1)}%`;
+            });
+
+            // Update SVG viewBox and redraw arrows on resize
+            window.addEventListener('resize', () => {
+                const diagramArea = document.getElementById('gan-diagram-area');
+                const diagramRect = diagramArea.getBoundingClientRect();
+                ganArrowsSvg.setAttribute('viewBox', `0 0 ${diagramRect.width} ${diagramRect.height}`);
+                
+                // If a step is running or button is disabled, just update viewBox.
+                // Otherwise, redraw arrows if necessary.
+                if (!runTrainingStepBtn.disabled) {
+                    resetVisuals(); // Ensure all active states are cleared cleanly on resize
+                }
+            });
+
+            // Attach event listener to the button
+            runTrainingStepBtn.addEventListener('click', runTrainingStep);
+        </script>
+    </div>
+</body>
+</html>
